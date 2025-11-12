@@ -1,0 +1,40 @@
+body {
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+}
+
+/* Soft glow for primary buttons */
+.glow:hover {
+  box-shadow: 0 8px 24px rgba(20,184,166,0.35);
+}
+
+/* Focus ring for accessibility */
+.focus-ring:focus-visible {
+  outline: 3px solid rgba(20,184,166,0.8);
+  outline-offset: 2px;
+}
+
+/* Simple tooltip */
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+  white-space: nowrap;
+}
+
+/* Hide scrollbars in side nav for a cleaner look while retaining scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Enable View Transitions */
+@view-transition {
+  navigation: auto;
+}
