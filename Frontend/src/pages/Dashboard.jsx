@@ -1,177 +1,122 @@
-import ImageUpload from "../components/ImageUpload"
+export default function Dashboard() {
+  const breeds = [
+    { id: 1, name: 'Gir', type: 'Cattle', description: 'Indigenous Indian cattle breed' },
+    { id: 2, name: 'Holstein', type: 'Cattle', description: 'High-yield dairy breed' },
+    { id: 3, name: 'Jersey', type: 'Cattle', description: 'Premium quality milk' },
+    { id: 4, name: 'Sahiwal', type: 'Cattle', description: 'Heat tolerant breed' },
+    { id: 5, name: 'Murrah', type: 'Buffalo', description: 'Elite buffalo breed' },
+    { id: 6, name: 'Jaffrabadi', type: 'Buffalo', description: 'Heavy productive breed' }
+  ]
 
-const cattleBreeds = [
-  {
-    name: "Gir",
-    desc: "Indigenous Indian cattle breed known for heat tolerance and quality milk production.",
-  },
-  {
-    name: "Holstein Friesian",
-    desc: "Exotic high-yield dairy breed widely used in organized dairy programs.",
-  },
-  {
-    name: "Jersey",
-    desc: "Compact dairy breed valued for high butterfat milk content.",
-  },
-  {
-    name: "Sahiwal",
-    desc: "Native Indian breed with excellent adaptability to tropical climates.",
-  },
-]
+  const containerStyle = {
+    padding: '40px 20px',
+    maxWidth: '1400px',
+    margin: '0 auto'
+  }
 
-const buffaloBreeds = [
-  {
-    name: "Murrah",
-    desc: "Elite buffalo breed known for high milk yield and fat percentage.",
-  },
-  {
-    name: "Jaffrabadi",
-    desc: "Heavy buffalo breed recognized for strength and productivity.",
-  },
-]
+  const headerStyle = {
+    background: 'linear-gradient(135deg, #1a4d3a 0%, #2f7a60 100%)',
+    color: 'white',
+    padding: '50px 20px',
+    borderRadius: '8px',
+    marginBottom: '40px',
+    textAlign: 'center'
+  }
 
-const Dashboard = () => {
+  const headerTitleStyle = {
+    fontSize: '40px',
+    fontWeight: 'bold',
+    marginBottom: '15px'
+  }
+
+  const headerSubtitleStyle = {
+    fontSize: '16px',
+    opacity: '0.9'
+  }
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '20px',
+    marginBottom: '40px'
+  }
+
+  const cardStyle = {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '25px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    transition: 'transform 0.3s, box-shadow 0.3s'
+  }
+
+  const cardTitleStyle = {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#1a4d3a',
+    marginBottom: '10px'
+  }
+
+  const cardTextStyle = {
+    fontSize: '14px',
+    color: '#666',
+    marginBottom: '8px'
+  }
+
   return (
-    <div className="min-h-screen bg-[#f5f7f4] text-gray-800">
+    <div style={containerStyle}>
+      <div style={headerStyle}>
+        <div style={headerTitleStyle}>Animal Classification Dashboard</div>
+        <div style={headerSubtitleStyle}>Identify cattle and buffalo breeds using AI</div>
+      </div>
 
-      {/* ================= HERO ================= */}
-      <section className="bg-gradient-to-br from-[#2f5d50] to-[#3f7f6a] text-white py-16 px-6">
-        <div className="max-w-5xl mx-auto text-center space-y-4">
-          <h1 className="text-4xl font-bold tracking-wide">
-            Animal Type Classification Dashboard
-          </h1>
-          <p className="text-green-100 max-w-3xl mx-auto">
-            A smart image-based system for identifying cattle and buffalo breeds,
-            supporting genetic improvement initiatives under the Rashtriya Gokul Mission.
-          </p>
-        </div>
-      </section>
-
-      {/* ================= CONTEXT STRIP ================= */}
-      <section className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-6 text-center text-gray-600">
-          This dashboard serves as the frontend interface for automated animal
-          classification using AI and computer vision technologies.
-        </div>
-      </section>
-
-      {/* ================= MAIN CONTENT ================= */}
-      <main className="max-w-7xl mx-auto px-6 py-12 space-y-20">
-
-        {/* ===== SYSTEM INSIGHTS ===== */}
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: "Total Breeds", value: "6" },
-            { label: "Cattle Breeds", value: "4" },
-            { label: "Buffalo Breeds", value: "2" },
-            { label: "AI Model", value: "Under Development" },
-          ].map((item) => (
+      <div style={{ marginBottom: '30px' }}>
+        <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '20px', color: '#1a4d3a' }}>
+          Available Breeds
+        </h2>
+        <div style={gridStyle}>
+          {breeds.map((breed) => (
             <div
-              key={item.label}
-              className="bg-white rounded-xl border border-gray-200 p-6 text-center"
+              key={breed.id}
+              style={cardStyle}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-5px)'
+                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
+              }}
             >
-              <p className="text-sm text-gray-500">{item.label}</p>
-              <p className="mt-2 text-xl font-semibold text-[#2f5d50]">
-                {item.value}
-              </p>
+              <div style={cardTitleStyle}>{breed.name}</div>
+              <div style={cardTextStyle}><strong>Type:</strong> {breed.type}</div>
+              <div style={cardTextStyle}>{breed.description}</div>
             </div>
           ))}
-        </section>
+        </div>
+      </div>
 
-        {/* ===== BREED KNOWLEDGE BASE ===== */}
-        <section className="space-y-12">
-          <div className="text-center space-y-2">
-            <h2 className="text-3xl font-semibold text-gray-800">
-              Breed Knowledge Base
-            </h2>
-            <p className="text-gray-600">
-              Animal categories included in the training dataset
-            </p>
-          </div>
-
-          {/* CATTLE */}
-          <div className="space-y-6">
-            <h3 className="text-2xl font-medium text-[#2f5d50]">
-              Cattle Breeds
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {cattleBreeds.map((breed) => (
-                <div
-                  key={breed.name}
-                  className="bg-white rounded-lg border-l-4 border-[#6fa98c] p-5 shadow-sm"
-                >
-                  <h4 className="font-semibold text-gray-800 mb-2">
-                    {breed.name}
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    {breed.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* BUFFALO */}
-          <div className="space-y-6">
-            <h3 className="text-2xl font-medium text-[#2f5d50]">
-              Buffalo Breeds
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {buffaloBreeds.map((breed) => (
-                <div
-                  key={breed.name}
-                  className="bg-white rounded-lg border-l-4 border-[#b08968] p-5 shadow-sm"
-                >
-                  <h4 className="font-semibold text-gray-800 mb-2">
-                    {breed.name}
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    {breed.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ===== CLASSIFICATION WORKSPACE ===== */}
-        <section className="bg-white rounded-2xl shadow-md p-10 space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-semibold text-gray-800">
-              Classification Workspace
-            </h2>
-            <p className="text-gray-600 mt-2">
-              Upload an animal image to initiate AI-based classification
-            </p>
-          </div>
-
-          <div className="flex flex-col lg:flex-row gap-12 justify-center items-start">
-            <ImageUpload />
-
-            <div className="flex-1 bg-[#f9faf8] border border-dashed rounded-xl p-8 text-center">
-              <p className="text-gray-500 mb-2">Prediction Output</p>
-              <p className="text-lg font-medium text-gray-800">
-                Breed: —
-              </p>
-              <p className="text-gray-600 mt-1">
-                Confidence Score: —
-              </p>
-              <p className="text-sm text-gray-400 mt-6">
-                AI model integration pending
-              </p>
-            </div>
-          </div>
-        </section>
-
-      </main>
-
-      {/* ================= FOOTER ================= */}
-      <footer className="bg-[#2f5d50] text-green-100 text-center py-6 text-sm">
-        Image-based Animal Type Classification System • Capstone Project • Phase II
-      </footer>
-
+      <div style={{ background: 'white', padding: '30px', borderRadius: '8px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)' }}>
+        <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '15px', color: '#1a4d3a' }}>Ready to Classify?</h3>
+        <p style={{ color: '#666', marginBottom: '20px' }}>Go to the Classify page to upload an image and get predictions</p>
+        <a 
+          href="/classify"
+          style={{
+            display: 'inline-block',
+            backgroundColor: '#1a4d3a',
+            color: 'white',
+            padding: '12px 30px',
+            borderRadius: '4px',
+            textDecoration: 'none',
+            fontSize: '16px',
+            fontWeight: '500',
+            transition: 'background-color 0.3s'
+          }}
+          onMouseEnter={(e) => e.target.style.backgroundColor = '#2f7a60'}
+          onMouseLeave={(e) => e.target.style.backgroundColor = '#1a4d3a'}
+        >
+          Go to Classify
+        </a>
+      </div>
     </div>
   )
 }
-
-export default Dashboard

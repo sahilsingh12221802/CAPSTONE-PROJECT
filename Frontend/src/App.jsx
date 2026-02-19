@@ -1,11 +1,15 @@
-import Dashboard from "./pages/Dashboard"
+import { Routes, Route } from 'react-router-dom'
+import Layout from './pages/Layout'
+import Dashboard from './pages/Dashboard'
+import Classify from './pages/Classify'
 
-function App() {
+export default function App() {
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Dashboard />
-    </div>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="classify" element={<Classify />} />
+      </Route>
+    </Routes>
   )
 }
-
-export default App

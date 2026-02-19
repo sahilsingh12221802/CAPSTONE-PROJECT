@@ -1,39 +1,72 @@
-import { useState } from "react"
-import ImagePreview from "./ImagePreview"
+import { useState } from 'react'
+import ImagePreview from './ImagePreview'
 
-const ImageUpload = () => {
+export default function ImageUpload() {
   const [image, setImage] = useState(null)
 
   const handleImageChange = (e) => {
     const file = e.target.files[0]
-    if (file) setImage(file)
+    if (file) {
+      setImage(file)
+    }
+  }
+
+  const containerStyle = {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '25px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+  }
+
+  const titleStyle = {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: '#1a4d3a',
+    marginBottom: '20px'
+  }
+
+  const uploadAreaStyle = {
+    border: '2px dashed #ccc',
+    borderRadius: '8px',
+    padding: '40px 20px',
+    textAlign: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    backgroundColor: '#f9faf8'
+  }
+
+  const uploadTextStyle = {
+    color: '#999',
+    fontSize: '14px'
   }
 
   return (
-    <div className="bg-white shadow-lg rounded-xl p-6 w-full max-w-md">
+    <div style={containerStyle}>
+      <div style={titleStyle}>Select Animal Image</div>
 
-      <h2 className="text-xl font-semibold text-gray-700 mb-4">
-        Upload Animal Image
-      </h2>
-
-      <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition">
-        
-        <span className="text-gray-500 text-sm">
-          Click to upload JPG or PNG image
-        </span>
-
+      <label
+        style={uploadAreaStyle}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = '#1a4d3a'
+          e.currentTarget.style.backgroundColor = '#f0f2f5'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = '#ccc'
+          e.currentTarget.style.backgroundColor = '#f9faf8'
+        }}
+      >
         <input
           type="file"
-          accept="image/png, image/jpeg"
-          className="hidden"
+          accept="image/png, image/jpeg, image/jpg"
           onChange={handleImageChange}
+          style={{ display: 'none' }}
         />
+        <div style={{ fontSize: '28px', marginBottom: '10px' }}>📷</div>
+        <div style={uploadTextStyle}>Click to upload PNG or JPG</div>
+        <div style={{ fontSize: '12px', color: '#ccc', marginTop: '8px' }}>Maximum 5MB</div>
       </label>
 
       {image && <ImagePreview image={image} />}
-
     </div>
   )
 }
-
-export default ImageUpload
