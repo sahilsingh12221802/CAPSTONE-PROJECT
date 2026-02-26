@@ -3,7 +3,7 @@ import random
 def predict_animal_type(image_bytes: bytes):
     """
     Placeholder prediction service.
-    This will be replaced with actual ML model inference later.
+    To be replaced by real ML model inference in Phase 4.
     """
     possible_classes = ["cattle", "buffalo"]
     prediction = random.choice(possible_classes)
