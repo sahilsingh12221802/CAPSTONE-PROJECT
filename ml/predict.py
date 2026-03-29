@@ -129,7 +129,10 @@ def classify(image_path):
                 'raw_scores': preds.tolist(),
                 'class_probabilities': probs_by_class,
                 'is_target_animal': True,
-                'message': 'External gate was uncertain, but classifier confidence is very high. Returning cattle/buffalo prediction.',
+                'message': (
+                    'External gate was uncertain, but classifier confidence is '
+                    'very high. Returning cattle/buffalo prediction.'
+                ),
                 'gate_reason': gate_reason,
                 'gate_predictions': gate_predictions,
             }
@@ -164,7 +167,10 @@ def classify(image_path):
             'raw_scores': preds.tolist(),
             'class_probabilities': probs_by_class,
             'is_target_animal': True,
-            'message': 'Image may be animal-like, but model confidence is too low for reliable cattle/buffalo classification.',
+            'message': (
+                'Image may be animal-like, but model confidence is too low for '
+                'reliable cattle/buffalo classification.'
+            ),
             'gate_reason': gate_reason,
             'gate_predictions': gate_predictions,
         }
