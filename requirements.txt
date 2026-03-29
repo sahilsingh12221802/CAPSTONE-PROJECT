@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pymongo
+tensorflow
+opencv-python-headless
+numpy
+pandas
+Pillow
+scipy
+python-multipart
+pydantic

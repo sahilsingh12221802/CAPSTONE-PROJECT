@@ -1,0 +1,106 @@
+import os
+import shutil
+import uuid
+from datetime import datetime
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pymongo import MongoClient
+
+from ml.predict import classify
+
+app = FastAPI(title='Cattle/Buffalo Classifier API')
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
+
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://127.0.0.1:27017')
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+db = client['animal_classification']
+collection = db['results']
+
+MODEL_PATH = os.path.abspath('models/cattle_buffalo_mobile.h5')
+
+
+@app.on_event('startup')
+def startup_event():
+    try:
+        client.server_info()
+    except Exception as e:
+        raise RuntimeError(f'Could not connect to MongoDB: {e}')
+
+    if not os.path.exists(MODEL_PATH):
+        raise RuntimeError(f'Trained model not found at: {MODEL_PATH}')
+
+@app.post('/classify')
+async def classify_animal(image: UploadFile = File(...)):
+    try:
+        if not image.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail='Only image files are allowed')
+
+        temp_dir = 'temp_uploads'
+        os.makedirs(temp_dir, exist_ok=True)
+        extension = os.path.splitext(image.filename)[1] or '.jpg'
+        unique_name = f'{uuid.uuid4().hex}{extension}'
+        temp_path = os.path.join(temp_dir, unique_name)
+
+        with open(temp_path, 'wb') as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+        result = classify(temp_path)
+        record = {
+            'filename': image.filename,
+            'predicted_label': result['label'],
+            'confidence': result['confidence'],
+            'raw_scores': result.get('raw_scores', []),
+            'class_probabilities': result.get('class_probabilities', {}),
+            'is_target_animal': result.get('is_target_animal', False),
+            'message': result.get('message', ''),
+            'gate_reason': result.get('gate_reason', ''),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+        insert_result = collection.insert_one(record)
+        # pymongo mutates inserted dictionaries by adding _id (ObjectId), so return a clean JSON-safe payload.
+        record_response = {
+            'id': str(insert_result.inserted_id),
+            'filename': record['filename'],
+            'label': record['predicted_label'],
+            'confidence': record['confidence'],
+            'raw_scores': record['raw_scores'],
+            'class_probabilities': record['class_probabilities'],
+            'is_target_animal': record['is_target_animal'],
+            'message': record['message'],
+            'gate_reason': record['gate_reason'],
+            'timestamp': record['timestamp']
+        }
+
+        return JSONResponse(status_code=200, content={'success': True, 'data': record_response})
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/records')
+def get_records(limit: int = 50):
+    docs = []
+    for doc in collection.find().sort([('timestamp', -1)]).limit(limit):
+        docs.append({
+            'id': str(doc.get('_id')),
+            'filename': doc.get('filename', ''),
+            'label': doc.get('predicted_label', ''),
+            'confidence': doc.get('confidence', 0.0),
+            'class_probabilities': doc.get('class_probabilities', {}),
+            'is_target_animal': doc.get('is_target_animal', False),
+            'message': doc.get('message', ''),
+            'timestamp': doc.get('timestamp', '')
+        })
+    return {'success': True, 'count': len(docs), 'data': docs}
