@@ -4,8 +4,9 @@ This module contains all machine learning workflows: training, prediction, and e
 
 ## Goals
 
-- Train a robust classifier for `Cattle`, `Buffalo`, and `Other`.
+- Train a robust classifier for breed-level bovine classes plus a unified non-target class.
 - Reduce false positives on unrelated images.
+- Improve human/logo/object rejection confidence using stronger non-target data.
 - Provide reproducible evaluation metrics and confusion output.
 
 ## Files
@@ -17,8 +18,10 @@ This module contains all machine learning workflows: training, prediction, and e
 ## Training Pipeline (High Level)
 
 - Uses transfer learning backbone (MobileNetV2).
-- Uses dataset label mapping from breed folders to target classes.
-- Builds/generated `Other` examples for non-target awareness.
+- Trains on breed folders directly (`Gir`, `Murrah`, etc.) for breed-level prediction.
+- Generates `Other` examples from CIFAR-10 natural images.
+- Generates `Human` examples from CIFAR-100 human fine-label classes.
+- Merges generated `Human` samples into `Other` during training (single non-target output class).
 - Trains in stages (frozen backbone then fine-tuning).
 - Saves best model and class labels into `models/`.
 
@@ -27,19 +30,19 @@ This module contains all machine learning workflows: training, prediction, and e
 - Loads model and labels.
 - Applies preprocessing + prediction.
 - Uses confidence/margin checks and gate signals.
-- Returns one of:
-	- `Cattle`
-	- `Buffalo`
-	- `Unknown` (for non-target or low-confidence cases)
+- Returns species + breed metadata for bovine predictions.
+- Returns `Other` for non-target images (human, logo, unrelated object).
+- Uses adaptive non-target confidence calibration to avoid static confidence percentages.
+- Returns `Unknown` only for low-confidence/ambiguous bovine decisions.
 
 ## Evaluation Outputs
 
 The evaluation script reports:
 
-- Overall accuracy
-- Bovine-only accuracy (`Cattle` vs `Buffalo`)
-- Bovine rejected-as-unknown rate
-- Non-target rejection rate
+- Overall accuracy including `Other`
+- Bovine species accuracy (`Cattle` vs `Buffalo`)
+- Bovine breed accuracy (`Gir`, `Murrah`, etc.)
+- Non-target (`Other`) rejection rate
 - Confusion matrix and sample error lines
 
 ## Run Commands
@@ -47,7 +50,8 @@ The evaluation script reports:
 From project root:
 
 ```bash
-source .venv/bin/activate
+source .venv311/bin/activate
+ONLY_PREPARE_DATA=true python -m ml.train
 python -m ml.train
 python -m ml.evaluate
 python -m ml.predict "path/to/image.jpg"
@@ -64,8 +68,8 @@ Saved in [models/](../models):
 
 - Main dataset root: `Cattle-Buffalo-breeds.folder/`
 - Expected splits: `train/`, `valid/`, `test/`
-- Breed folders are mapped to binary target species classes.
-- `train.py` generates additional non-target examples under `generated_other/`.
+- Breed folders are used as direct model classes.
+- `train.py` generates additional non-target examples under `generated_other/` and `generated_human/`.
 
 ## Generated `Other` Dataset (Important)
 
@@ -79,10 +83,7 @@ The `Other` class is auto-generated during training to teach the model what is *
 
 ### Data source used for `Other`
 
-`train.py` builds `Other` samples from grayscale datasets and converts them to RGB image files:
-
-- MNIST
-- Fashion-MNIST
+`train.py` builds `Other` samples from CIFAR-10 natural images.
 
 These samples are resized to model input size and saved as JPEG files.
 
@@ -113,6 +114,49 @@ These defaults are controlled by environment variables:
 
 - Generation is deterministic based on the `SEED` value.
 - Re-running training can regenerate this dataset and overwrite old generated files.
+
+## Generated `Human` Dataset (Important)
+
+Generated human samples are not a separate final label. They are merged into `Other` during training.
+
+### Data source used for `Human`
+
+`train.py` builds `Human` samples from CIFAR-100 images filtered by fine labels:
+
+- `baby` (2)
+- `boy` (11)
+- `girl` (35)
+- `man` (46)
+- `woman` (98)
+
+### Folder layout
+
+Generated files are created under:
+
+```text
+Cattle-Buffalo-breeds.folder/generated_human/
+├── train/Human/
+├── valid/Human/
+└── test/Human/
+```
+
+### Default generated sample counts
+
+- Train: `2400`
+- Validation: `500`
+- Test: `500`
+
+These defaults are controlled by environment variables:
+
+- `HUMAN_TRAIN_COUNT`
+- `HUMAN_VALID_COUNT`
+- `HUMAN_TEST_COUNT`
+
+### How `Human` is used
+
+- Human images are generated and stored under `generated_human/`.
+- During dataframe construction, those files are labeled as `Other`.
+- Final model output classes therefore include bovine breeds + `Other` only.
 
 ## Tunable Training Controls
 

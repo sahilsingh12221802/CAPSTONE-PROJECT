@@ -9,6 +9,16 @@ This folder stores trained model files used by backend inference.
 - `class_labels.json`
   - Class label ordering expected by inference code.
 
+Typical current labels:
+
+- `Gir`
+- `Holstein_Friesian`
+- `Jersey`
+- `Sahiwal`
+- `Jaffrabadi`
+- `Murrah`
+- `Other`
+
 ## How These Files Are Used
 
 - Backend calls `ml/predict.py`.
@@ -20,7 +30,7 @@ This folder stores trained model files used by backend inference.
 From project root:
 
 ```bash
-source .venv/bin/activate
+source .venv311/bin/activate
 python -m ml.train
 ```
 

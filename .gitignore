@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/.cache/
+
+# Build artifacts
+frontend/build/
+dist/
+build/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime temp
+temp_uploads/
+
+# Generated training helper datasets
+Cattle-Buffalo-breeds.folder/generated_other/
+Cattle-Buffalo-breeds.folder/generated_human/

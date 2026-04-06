@@ -42,6 +42,16 @@ function ClassifyPage() {
     }
   };
 
+  const statusStyleByLabel = {
+    Unknown: "border-amber-200 bg-amber-50 text-amber-700",
+    Other: "border-orange-200 bg-orange-50 text-orange-700",
+    Human: "border-sky-200 bg-sky-50 text-sky-700",
+    Cattle: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    Buffalo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+  };
+
+  const styleClass = statusStyleByLabel[result?.label] || "border-gray-200 bg-gray-50 text-gray-700";
+
   return (
     <div className="grid gap-6 lg:grid-cols-[3fr,2fr]">
       <section className="card p-7">
@@ -88,33 +98,50 @@ function ClassifyPage() {
         ) : null}
 
         {result ? (
-          <div
-            className={`mt-5 space-y-3 rounded-xl border p-4 ${
-              result.label === "Unknown"
-                ? "border-amber-200 bg-amber-50"
-                : "border-emerald-100 bg-emerald-50"
-            }`}
-          >
+          <div className={`mt-5 space-y-4 rounded-xl border p-4 ${styleClass}`}>
             <div>
-              <p
-                className={`text-xs uppercase tracking-[0.14em] ${
-                  result.label === "Unknown" ? "text-amber-700" : "text-emerald-700"
-                }`}
-              >
-                Prediction
-              </p>
+              <p className="text-xs uppercase tracking-[0.14em]">Prediction</p>
               <p className="text-2xl font-bold text-gray-900">{result.label}</p>
             </div>
+
+            {result.species ? (
+              <div>
+                <p className="text-xs uppercase tracking-[0.14em]">Species</p>
+                <p className="text-lg font-semibold text-gray-900">{result.species}</p>
+              </div>
+            ) : null}
+
+            {result.breed ? (
+              <div>
+                <p className="text-xs uppercase tracking-[0.14em]">Breed</p>
+                <p className="text-lg font-semibold text-gray-900">{result.breed.replaceAll("_", " ")}</p>
+              </div>
+            ) : null}
+
             <div>
-              <p
-                className={`text-xs uppercase tracking-[0.14em] ${
-                  result.label === "Unknown" ? "text-amber-700" : "text-emerald-700"
-                }`}
-              >
-                Confidence
-              </p>
+              <p className="text-xs uppercase tracking-[0.14em]">Confidence</p>
               <p className="text-lg font-semibold text-gray-900">{(result.confidence * 100).toFixed(2)}%</p>
             </div>
+
+            {Array.isArray(result.top_predictions) && result.top_predictions.length > 0 ? (
+              <div>
+                <p className="text-xs uppercase tracking-[0.14em]">Top Predictions</p>
+                <div className="mt-2 space-y-2">
+                  {result.top_predictions.map((item) => (
+                    <div key={item.label}>
+                      <div className="mb-1 flex items-center justify-between text-xs text-gray-700">
+                        <span>{item.label.replaceAll("_", " ")}</span>
+                        <span>{(item.score * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/70">
+                        <div className="h-2 rounded-full bg-gray-800" style={{ width: `${Math.max(item.score * 100, 3)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {result.message ? <p className="text-sm text-gray-700">{result.message}</p> : null}
             <p className="text-xs text-gray-500">File: {result.filename}</p>
           </div>

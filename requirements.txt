@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 pymongo
-tensorflow
+tensorflow==2.21.0
+keras==3.14.0
 opencv-python-headless
 numpy
 pandas
