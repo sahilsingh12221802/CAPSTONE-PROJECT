@@ -10,3 +10,6 @@ Pillow
 scipy
 python-multipart
 pydantic
+matplotlib
+seaborn
+scikit-learn

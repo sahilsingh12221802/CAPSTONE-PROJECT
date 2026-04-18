@@ -12,6 +12,8 @@ from tensorflow.keras.preprocessing.image import img_to_array, load_img
 MODEL_PATH = os.path.abspath('models/cattle_buffalo_mobile.h5')
 LABELS_PATH = os.path.abspath('models/class_labels.json')
 IMG_SIZE = (224, 224)
+TTA_ENABLED = os.getenv('TTA_ENABLED', 'true').lower() == 'true'
+TTA_BRIGHTNESS_DELTA = float(os.getenv('TTA_BRIGHTNESS_DELTA', '0.08'))
 CLASSIFIER_CONFIDENCE_THRESHOLD = 0.70
 CLASSIFIER_MARGIN_THRESHOLD = 0.12
 OTHER_CLASS_CONFIDENCE_THRESHOLD = 0.45
@@ -44,6 +46,20 @@ def load_and_preprocess(image_path):
     arr = arr.astype('float32') / 255.0
     arr = np.expand_dims(arr, axis=0)
     return arr
+
+
+def load_tta_batch(image_path):
+    """Build a small deterministic TTA batch for more stable breed predictions."""
+    img = load_img(image_path, target_size=IMG_SIZE)
+    base = img_to_array(img).astype('float32') / 255.0
+
+    variants = [
+        base,
+        np.fliplr(base),
+        np.clip(base + TTA_BRIGHTNESS_DELTA, 0.0, 1.0),
+        np.clip(base - TTA_BRIGHTNESS_DELTA, 0.0, 1.0),
+    ]
+    return np.stack(variants, axis=0)
 
 
 def load_and_preprocess_for_gate(image_path):
@@ -223,8 +239,12 @@ def classify(image_path):
     ]
 
     model = get_classifier_model()
-    x = load_and_preprocess(image_path)
-    preds = model.predict(x, verbose=0)[0]
+    if TTA_ENABLED:
+        x_batch = load_tta_batch(image_path)
+        preds = np.mean(model.predict(x_batch, verbose=0), axis=0)
+    else:
+        x = load_and_preprocess(image_path)
+        preds = model.predict(x, verbose=0)[0]
     class_labels = get_class_labels(len(preds))
     supports_breed = any(label in BREED_CLASSES for label in class_labels)
     probs_by_class = {

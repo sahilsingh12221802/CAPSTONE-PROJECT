@@ -1,0 +1,13 @@
+                   precision    recall  f1-score   support
+
+              Gir       0.54      0.64      0.58        22
+Holstein_Friesian       0.93      0.89      0.91        28
+           Jersey       0.89      0.84      0.86        19
+          Sahiwal       0.82      0.72      0.77        50
+       Jaffrabadi       0.70      0.78      0.74         9
+           Murrah       0.72      0.87      0.79        15
+            Other       1.00      1.00      1.00      1100
+
+         accuracy                           0.97      1243
+        macro avg       0.80      0.82      0.81      1243
+     weighted avg       0.98      0.97      0.97      1243

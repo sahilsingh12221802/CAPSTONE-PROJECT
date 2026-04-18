@@ -25,6 +25,7 @@ MODEL_DIR = os.path.join(BASE_DIR, 'models')
 os.makedirs(MODEL_DIR, exist_ok=True)
 MODEL_PATH = os.path.join(MODEL_DIR, 'cattle_buffalo_mobile.h5')
 LABELS_PATH = os.path.join(MODEL_DIR, 'class_labels.json')
+HISTORY_PATH = os.path.join(MODEL_DIR, 'training_history.json')
 
 BREED_TO_SPECIES = {
     'Gir': 'Cattle',
@@ -42,20 +43,26 @@ IMG_WIDTH = 224
 BATCH_SIZE = int(os.getenv('BATCH_SIZE', '32'))
 INITIAL_EPOCHS = int(os.getenv('INITIAL_EPOCHS', '16'))
 FINETUNE_EPOCHS = int(os.getenv('FINETUNE_EPOCHS', '8'))
+REFINE_EPOCHS = int(os.getenv('REFINE_EPOCHS', '4'))
 BASE_LEARNING_RATE = float(os.getenv('BASE_LR', '1e-4'))
 FINETUNE_LEARNING_RATE = float(os.getenv('FINETUNE_LR', '1e-5'))
+REFINE_LEARNING_RATE = float(os.getenv('REFINE_LR', '5e-6'))
 FINE_TUNE_LAYERS = int(os.getenv('FINE_TUNE_LAYERS', '40'))
+LABEL_SMOOTHING = float(os.getenv('LABEL_SMOOTHING', '0.06'))
+ADAM_CLIPNORM = float(os.getenv('ADAM_CLIPNORM', '1.0'))
+ADAM_WEIGHT_DECAY = float(os.getenv('ADAM_WEIGHT_DECAY', '1e-5'))
 ONLY_PREPARE_DATA = os.getenv('ONLY_PREPARE_DATA', 'false').lower() == 'true'
 
-OTHER_TRAIN_COUNT = int(os.getenv('OTHER_TRAIN_COUNT', '2800'))
-OTHER_VALID_COUNT = int(os.getenv('OTHER_VALID_COUNT', '600'))
+OTHER_TRAIN_COUNT = int(os.getenv('OTHER_TRAIN_COUNT', '1800'))
+OTHER_VALID_COUNT = int(os.getenv('OTHER_VALID_COUNT', '450'))
 OTHER_TEST_COUNT = int(os.getenv('OTHER_TEST_COUNT', '600'))
-HUMAN_TRAIN_COUNT = int(os.getenv('HUMAN_TRAIN_COUNT', '2400'))
-HUMAN_VALID_COUNT = int(os.getenv('HUMAN_VALID_COUNT', '500'))
+HUMAN_TRAIN_COUNT = int(os.getenv('HUMAN_TRAIN_COUNT', '1200'))
+HUMAN_VALID_COUNT = int(os.getenv('HUMAN_VALID_COUNT', '350'))
 HUMAN_TEST_COUNT = int(os.getenv('HUMAN_TEST_COUNT', '500'))
 
 RNG_SEED = int(os.getenv('SEED', '42'))
 rng = np.random.default_rng(RNG_SEED)
+tf.keras.utils.set_random_seed(RNG_SEED)
 
 
 def _ensure_clean_dir(path: Path) -> None:
@@ -174,12 +181,14 @@ def compute_class_weights(train_df: pd.DataFrame, class_indices: dict) -> dict:
 def make_generators(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame):
     train_datagen = ImageDataGenerator(
         rescale=1.0 / 255.0,
-        rotation_range=25,
+        rotation_range=30,
         width_shift_range=0.15,
         height_shift_range=0.15,
         shear_range=0.15,
-        zoom_range=0.2,
+        zoom_range=0.25,
         horizontal_flip=True,
+        brightness_range=(0.8, 1.2),
+        channel_shift_range=20.0,
         fill_mode='nearest'
     )
 
@@ -222,6 +231,63 @@ def make_generators(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.Da
     return train_generator, validation_generator, test_generator
 
 
+def make_refinement_generators(train_df: pd.DataFrame, val_df: pd.DataFrame):
+    """Build a bovine-focused but still non-target-aware refinement stream."""
+    train_bovine = train_df[train_df['label'] != 'Other'].copy()
+    train_other = train_df[train_df['label'] == 'Other'].copy()
+
+    # Keep enough non-target examples to preserve rejection, but avoid overwhelming breed learning.
+    target_other_n = max(200, int(len(train_bovine) * 0.6))
+    if len(train_other) > target_other_n:
+        train_other = train_other.sample(n=target_other_n, random_state=RNG_SEED)
+
+    refine_train_df = pd.concat([train_bovine, train_other], ignore_index=True)
+
+    val_bovine = val_df[val_df['label'] != 'Other'].copy()
+    val_other = val_df[val_df['label'] == 'Other'].copy()
+    target_val_other_n = max(80, int(len(val_bovine) * 0.6))
+    if len(val_other) > target_val_other_n:
+        val_other = val_other.sample(n=target_val_other_n, random_state=RNG_SEED)
+    refine_val_df = pd.concat([val_bovine, val_other], ignore_index=True)
+
+    refine_train_datagen = ImageDataGenerator(
+        rescale=1.0 / 255.0,
+        rotation_range=18,
+        width_shift_range=0.10,
+        height_shift_range=0.10,
+        shear_range=0.10,
+        zoom_range=0.15,
+        horizontal_flip=True,
+        brightness_range=(0.9, 1.1),
+        fill_mode='nearest',
+    )
+    refine_val_datagen = ImageDataGenerator(rescale=1.0 / 255.0)
+
+    refine_train_gen = refine_train_datagen.flow_from_dataframe(
+        refine_train_df,
+        x_col='filepath',
+        y_col='label',
+        classes=CLASS_NAMES,
+        target_size=(IMG_HEIGHT, IMG_WIDTH),
+        batch_size=BATCH_SIZE,
+        class_mode='categorical',
+        shuffle=True,
+        seed=RNG_SEED,
+    )
+    refine_val_gen = refine_val_datagen.flow_from_dataframe(
+        refine_val_df,
+        x_col='filepath',
+        y_col='label',
+        classes=CLASS_NAMES,
+        target_size=(IMG_HEIGHT, IMG_WIDTH),
+        batch_size=BATCH_SIZE,
+        class_mode='categorical',
+        shuffle=False,
+    )
+
+    return refine_train_df, refine_train_gen, refine_val_gen
+
+
 def build_model(num_classes: int):
     base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(IMG_HEIGHT, IMG_WIDTH, 3))
     base.trainable = False
@@ -235,6 +301,20 @@ def build_model(num_classes: int):
 
     model = Model(inputs=base.input, outputs=output)
     return model, base
+
+
+def make_optimizer(learning_rate: float):
+    # Clip gradients to reduce unstable updates and use light decay for better generalization.
+    return tf.keras.optimizers.Adam(
+        learning_rate=learning_rate,
+        clipnorm=ADAM_CLIPNORM,
+        weight_decay=ADAM_WEIGHT_DECAY,
+    )
+
+
+def make_loss():
+    # Label smoothing improves robustness on visually similar breeds (e.g., Gir vs Sahiwal).
+    return tf.keras.losses.CategoricalCrossentropy(label_smoothing=LABEL_SMOOTHING)
 
 
 def make_callbacks(model_path: str, patience: int = 5):
@@ -286,13 +366,13 @@ def main():
 
     model, base = build_model(num_classes=len(CLASS_NAMES))
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=BASE_LEARNING_RATE),
-        loss='categorical_crossentropy',
+        optimizer=make_optimizer(BASE_LEARNING_RATE),
+        loss=make_loss(),
         metrics=['accuracy']
     )
 
     print(f'Stage 1 training for {INITIAL_EPOCHS} epochs (frozen backbone).')
-    model.fit(
+    stage1_history = model.fit(
         train_generator,
         validation_data=validation_generator,
         epochs=INITIAL_EPOCHS,
@@ -309,13 +389,13 @@ def main():
             layer.trainable = False
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=FINETUNE_LEARNING_RATE),
-        loss='categorical_crossentropy',
+        optimizer=make_optimizer(FINETUNE_LEARNING_RATE),
+        loss=make_loss(),
         metrics=['accuracy']
     )
 
     print(f'Stage 2 fine-tuning for {FINETUNE_EPOCHS} epochs (top {FINE_TUNE_LAYERS} layers).')
-    model.fit(
+    stage2_history = model.fit(
         train_generator,
         validation_data=validation_generator,
         epochs=INITIAL_EPOCHS + FINETUNE_EPOCHS,
@@ -323,6 +403,27 @@ def main():
         callbacks=make_callbacks(MODEL_PATH, patience=4),
         class_weight=class_weight
     )
+
+    refine_history_payload = {}
+    if REFINE_EPOCHS > 0:
+        print(f'Stage 3 breed refinement for {REFINE_EPOCHS} epochs (bovine-focused mix).')
+        refine_train_df, refine_train_gen, refine_val_gen = make_refinement_generators(train_df, val_df)
+        refine_class_weight = compute_class_weights(refine_train_df, refine_train_gen.class_indices)
+
+        model.compile(
+            optimizer=make_optimizer(REFINE_LEARNING_RATE),
+            loss=make_loss(),
+            metrics=['accuracy'],
+        )
+        refine_history = model.fit(
+            refine_train_gen,
+            validation_data=refine_val_gen,
+            epochs=INITIAL_EPOCHS + FINETUNE_EPOCHS + REFINE_EPOCHS,
+            initial_epoch=INITIAL_EPOCHS + FINETUNE_EPOCHS,
+            callbacks=make_callbacks(MODEL_PATH, patience=3),
+            class_weight=refine_class_weight,
+        )
+        refine_history_payload = {k: [float(v) for v in values] for k, values in refine_history.history.items()}
 
     best_model = tf.keras.models.load_model(MODEL_PATH)
     loss, acc = best_model.evaluate(test_generator, verbose=1)
@@ -332,8 +433,31 @@ def main():
     with open(LABELS_PATH, 'w', encoding='utf-8') as f:
         json.dump(CLASS_NAMES, f, indent=2)
 
+    history_payload = {
+        'stage1': {k: [float(v) for v in values] for k, values in stage1_history.history.items()},
+        'stage2': {k: [float(v) for v in values] for k, values in stage2_history.history.items()},
+        'config': {
+            'seed': RNG_SEED,
+            'batch_size': BATCH_SIZE,
+            'initial_epochs': INITIAL_EPOCHS,
+            'finetune_epochs': FINETUNE_EPOCHS,
+            'base_lr': BASE_LEARNING_RATE,
+            'finetune_lr': FINETUNE_LEARNING_RATE,
+            'label_smoothing': LABEL_SMOOTHING,
+            'adam_clipnorm': ADAM_CLIPNORM,
+            'adam_weight_decay': ADAM_WEIGHT_DECAY,
+            'refine_epochs': REFINE_EPOCHS,
+            'refine_lr': REFINE_LEARNING_RATE,
+        },
+    }
+    if refine_history_payload:
+        history_payload['stage3_refine'] = refine_history_payload
+    with open(HISTORY_PATH, 'w', encoding='utf-8') as f:
+        json.dump(history_payload, f, indent=2)
+
     print(f'Saved model to {MODEL_PATH}')
     print(f'Saved class labels to {LABELS_PATH}')
+    print(f'Saved training history to {HISTORY_PATH}')
 
 
 if __name__ == '__main__':
