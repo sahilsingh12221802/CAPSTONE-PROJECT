@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from PIL import Image
-from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import (MobileNetV2,
+                                                        preprocess_input)
 from tensorflow.keras.callbacks import (EarlyStopping, ModelCheckpoint,
                                         ReduceLROnPlateau)
 from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
@@ -37,6 +38,7 @@ BREED_TO_SPECIES = {
 }
 BREED_CLASSES = list(BREED_TO_SPECIES.keys())
 CLASS_NAMES = BREED_CLASSES + ['Other']
+HARD_BREEDS = {'Gir', 'Sahiwal', 'Jaffrabadi', 'Murrah'}
 
 IMG_HEIGHT = 224
 IMG_WIDTH = 224
@@ -52,6 +54,8 @@ LABEL_SMOOTHING = float(os.getenv('LABEL_SMOOTHING', '0.06'))
 ADAM_CLIPNORM = float(os.getenv('ADAM_CLIPNORM', '1.0'))
 ADAM_WEIGHT_DECAY = float(os.getenv('ADAM_WEIGHT_DECAY', '1e-5'))
 ONLY_PREPARE_DATA = os.getenv('ONLY_PREPARE_DATA', 'false').lower() == 'true'
+HARD_BREED_WEIGHT_BOOST = float(os.getenv('HARD_BREED_WEIGHT_BOOST', '1.35'))
+HARD_BREED_OVERSAMPLE_FACTOR = float(os.getenv('HARD_BREED_OVERSAMPLE_FACTOR', '1.40'))
 
 OTHER_TRAIN_COUNT = int(os.getenv('OTHER_TRAIN_COUNT', '1800'))
 OTHER_VALID_COUNT = int(os.getenv('OTHER_VALID_COUNT', '450'))
@@ -178,9 +182,48 @@ def compute_class_weights(train_df: pd.DataFrame, class_indices: dict) -> dict:
     return class_weight
 
 
+def apply_hard_breed_weight_boost(class_weight: dict, class_indices: dict) -> dict:
+    boosted = dict(class_weight)
+    if HARD_BREED_WEIGHT_BOOST <= 1.0:
+        return boosted
+
+    for breed in HARD_BREEDS:
+        idx = class_indices.get(breed)
+        if idx is not None:
+            boosted[idx] = float(boosted[idx] * HARD_BREED_WEIGHT_BOOST)
+    return boosted
+
+
+def oversample_hard_breeds(train_df: pd.DataFrame) -> pd.DataFrame:
+    bovine_df = train_df[train_df['label'].isin(BREED_CLASSES)].copy()
+    if bovine_df.empty:
+        return train_df
+
+    counts = bovine_df['label'].value_counts()
+    max_bovine_count = int(counts.max())
+    target_count = int(max_bovine_count * max(1.0, HARD_BREED_OVERSAMPLE_FACTOR))
+
+    extra_parts = []
+    for breed in HARD_BREEDS:
+        breed_df = bovine_df[bovine_df['label'] == breed]
+        if breed_df.empty:
+            continue
+
+        needed = max(0, target_count - len(breed_df))
+        if needed > 0:
+            sampled = breed_df.sample(n=needed, replace=True, random_state=RNG_SEED)
+            extra_parts.append(sampled)
+
+    if not extra_parts:
+        return train_df
+
+    augmented = pd.concat([train_df] + extra_parts, ignore_index=True)
+    return augmented.sample(frac=1.0, random_state=RNG_SEED).reset_index(drop=True)
+
+
 def make_generators(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame):
     train_datagen = ImageDataGenerator(
-        rescale=1.0 / 255.0,
+        preprocessing_function=preprocess_input,
         rotation_range=30,
         width_shift_range=0.15,
         height_shift_range=0.15,
@@ -192,7 +235,7 @@ def make_generators(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.Da
         fill_mode='nearest'
     )
 
-    val_test_datagen = ImageDataGenerator(rescale=1.0 / 255.0)
+    val_test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
 
     train_generator = train_datagen.flow_from_dataframe(
         train_df,
@@ -251,7 +294,7 @@ def make_refinement_generators(train_df: pd.DataFrame, val_df: pd.DataFrame):
     refine_val_df = pd.concat([val_bovine, val_other], ignore_index=True)
 
     refine_train_datagen = ImageDataGenerator(
-        rescale=1.0 / 255.0,
+        preprocessing_function=preprocess_input,
         rotation_range=18,
         width_shift_range=0.10,
         height_shift_range=0.10,
@@ -261,7 +304,7 @@ def make_refinement_generators(train_df: pd.DataFrame, val_df: pd.DataFrame):
         brightness_range=(0.9, 1.1),
         fill_mode='nearest',
     )
-    refine_val_datagen = ImageDataGenerator(rescale=1.0 / 255.0)
+    refine_val_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
 
     refine_train_gen = refine_train_datagen.flow_from_dataframe(
         refine_train_df,
@@ -359,8 +402,12 @@ def main():
     print('Train label distribution:')
     print(train_df['label'].value_counts())
 
+    train_df = oversample_hard_breeds(train_df)
+    print(f'Train images after hard-breed oversampling: {len(train_df)}')
+
     train_generator, validation_generator, test_generator = make_generators(train_df, val_df, test_df)
     class_weight = compute_class_weights(train_df, train_generator.class_indices)
+    class_weight = apply_hard_breed_weight_boost(class_weight, train_generator.class_indices)
     print('Class indices:', train_generator.class_indices)
     print('Class weights:', class_weight)
 
@@ -407,8 +454,34 @@ def main():
     refine_history_payload = {}
     if REFINE_EPOCHS > 0:
         print(f'Stage 3 breed refinement for {REFINE_EPOCHS} epochs (bovine-focused mix).')
-        refine_train_df, refine_train_gen, refine_val_gen = make_refinement_generators(train_df, val_df)
+        refine_train_df, _, refine_val_gen = make_refinement_generators(train_df, val_df)
+        refine_train_df = oversample_hard_breeds(refine_train_df)
+
+        refine_train_datagen = ImageDataGenerator(
+            preprocessing_function=preprocess_input,
+            rotation_range=18,
+            width_shift_range=0.10,
+            height_shift_range=0.10,
+            shear_range=0.10,
+            zoom_range=0.15,
+            horizontal_flip=True,
+            brightness_range=(0.9, 1.1),
+            fill_mode='nearest',
+        )
+        refine_train_gen = refine_train_datagen.flow_from_dataframe(
+            refine_train_df,
+            x_col='filepath',
+            y_col='label',
+            classes=CLASS_NAMES,
+            target_size=(IMG_HEIGHT, IMG_WIDTH),
+            batch_size=BATCH_SIZE,
+            class_mode='categorical',
+            shuffle=True,
+            seed=RNG_SEED,
+        )
+
         refine_class_weight = compute_class_weights(refine_train_df, refine_train_gen.class_indices)
+        refine_class_weight = apply_hard_breed_weight_boost(refine_class_weight, refine_train_gen.class_indices)
 
         model.compile(
             optimizer=make_optimizer(REFINE_LEARNING_RATE),
@@ -448,6 +521,8 @@ def main():
             'adam_weight_decay': ADAM_WEIGHT_DECAY,
             'refine_epochs': REFINE_EPOCHS,
             'refine_lr': REFINE_LEARNING_RATE,
+            'hard_breed_weight_boost': HARD_BREED_WEIGHT_BOOST,
+            'hard_breed_oversample_factor': HARD_BREED_OVERSAMPLE_FACTOR,
         },
     }
     if refine_history_payload:

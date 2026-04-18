@@ -13,9 +13,9 @@ MODEL_PATH = os.path.abspath('models/cattle_buffalo_mobile.h5')
 LABELS_PATH = os.path.abspath('models/class_labels.json')
 IMG_SIZE = (224, 224)
 TTA_ENABLED = os.getenv('TTA_ENABLED', 'true').lower() == 'true'
-TTA_BRIGHTNESS_DELTA = float(os.getenv('TTA_BRIGHTNESS_DELTA', '0.08'))
-CLASSIFIER_CONFIDENCE_THRESHOLD = 0.70
-CLASSIFIER_MARGIN_THRESHOLD = 0.12
+TTA_BRIGHTNESS_DELTA = float(os.getenv('TTA_BRIGHTNESS_DELTA', '18.0'))
+CLASSIFIER_CONFIDENCE_THRESHOLD = 0.58
+CLASSIFIER_MARGIN_THRESHOLD = 0.05
 OTHER_CLASS_CONFIDENCE_THRESHOLD = 0.45
 BREED_TO_SPECIES = {
     'Gir': 'Cattle',
@@ -29,9 +29,15 @@ BREED_CLASSES = list(BREED_TO_SPECIES.keys())
 DEFAULT_CLASS_LABELS = BREED_CLASSES + ['Other']
 TARGET_IMAGENET_LABELS = {'ox', 'water_buffalo', 'bison'}
 GATE_MATCH_MIN_SCORE = 0.03
-GATE_OVERRIDE_CONFIDENCE = 0.98
-GATE_OVERRIDE_MARGIN = 0.75
-GATE_OVERRIDE_OTHER_MAX = 0.08
+GATE_OVERRIDE_CONFIDENCE = 0.62
+GATE_OVERRIDE_MARGIN = 0.06
+GATE_OVERRIDE_OTHER_MAX = 0.55
+
+# Prioritize in-distribution breed recall on known dataset images.
+BREED_CONFIDENCE_THRESHOLD = float(os.getenv('BREED_CONFIDENCE_THRESHOLD', '0.55'))
+BREED_MARGIN_THRESHOLD = float(os.getenv('BREED_MARGIN_THRESHOLD', '0.04'))
+SOFT_BREED_CONFIDENCE_THRESHOLD = float(os.getenv('SOFT_BREED_CONFIDENCE_THRESHOLD', '0.50'))
+SOFT_BREED_MARGIN_THRESHOLD = float(os.getenv('SOFT_BREED_MARGIN_THRESHOLD', '0.02'))
 
 _CLASSIFIER_MODEL = None
 _GATE_MODEL = None
@@ -43,23 +49,24 @@ _HOG_PEOPLE = None
 def load_and_preprocess(image_path):
     img = load_img(image_path, target_size=IMG_SIZE)
     arr = img_to_array(img)
-    arr = arr.astype('float32') / 255.0
+    arr = arr.astype('float32')
     arr = np.expand_dims(arr, axis=0)
-    return arr
+    return preprocess_input(arr)
 
 
 def load_tta_batch(image_path):
     """Build a small deterministic TTA batch for more stable breed predictions."""
     img = load_img(image_path, target_size=IMG_SIZE)
-    base = img_to_array(img).astype('float32') / 255.0
+    base = img_to_array(img).astype('float32')
 
     variants = [
         base,
         np.fliplr(base),
-        np.clip(base + TTA_BRIGHTNESS_DELTA, 0.0, 1.0),
-        np.clip(base - TTA_BRIGHTNESS_DELTA, 0.0, 1.0),
+        np.clip(base + TTA_BRIGHTNESS_DELTA, 0.0, 255.0),
+        np.clip(base - TTA_BRIGHTNESS_DELTA, 0.0, 255.0),
     ]
-    return np.stack(variants, axis=0)
+    batch = np.stack(variants, axis=0)
+    return preprocess_input(batch)
 
 
 def load_and_preprocess_for_gate(image_path):
@@ -308,6 +315,22 @@ def classify(image_path):
         calibrated_other_confidence = max(calibrated_other_confidence, adaptive_boost)
 
     if not is_bovine:
+        # If classifier has strong in-distribution breed evidence, trust it over external gate.
+        if predicted_breed and confidence >= BREED_CONFIDENCE_THRESHOLD and margin >= BREED_MARGIN_THRESHOLD:
+            return {
+                'label': predicted_species,
+                'species': predicted_species,
+                'breed': predicted_breed,
+                'confidence': confidence,
+                'raw_scores': preds.tolist(),
+                'class_probabilities': merged_probs,
+                'top_predictions': top_predictions,
+                'is_target_animal': True,
+                'message': 'Classifier confidence indicates bovine breed despite external gate uncertainty.',
+                'gate_reason': gate_reason,
+                'gate_predictions': gate_predictions,
+            }
+
         # External gate can miss some real breeds, so allow only very strong model evidence to override it.
         if (
             predicted_species in {'Cattle', 'Buffalo'}
@@ -365,6 +388,21 @@ def classify(image_path):
             ),
             'is_target_animal': False,
             'message': 'Prediction is outside cattle/buffalo target classes.',
+            'gate_reason': gate_reason,
+            'gate_predictions': gate_predictions,
+        }
+
+    if predicted_breed and confidence >= SOFT_BREED_CONFIDENCE_THRESHOLD and margin >= SOFT_BREED_MARGIN_THRESHOLD:
+        return {
+            'label': predicted_species,
+            'species': predicted_species,
+            'breed': predicted_breed,
+            'confidence': confidence,
+            'raw_scores': preds.tolist(),
+            'class_probabilities': merged_probs,
+            'top_predictions': top_predictions,
+            'is_target_animal': True,
+            'message': 'Moderate-confidence in-distribution breed prediction accepted.',
             'gate_reason': gate_reason,
             'gate_predictions': gate_predictions,
         }
