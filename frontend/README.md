@@ -15,8 +15,8 @@ User-facing dashboard for classification, project overview, and results presenta
 - Home page
 - Breeds overview page
 - Breed details page
-- Classify page (upload + species/breed result + top-prediction bars)
-- Dashboard analytics page (species chart, breed chart, confidence trend)
+- Classify page (upload + inference result)
+- Dashboard analytics page
 
 ## API Integration
 

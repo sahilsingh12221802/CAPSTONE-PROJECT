@@ -20,12 +20,9 @@ This project combines four layers:
 
 ### Core Features
 
-- Breed-level model training for bovine classes: `Gir`, `Holstein_Friesian`, `Jersey`, `Sahiwal`, `Jaffrabadi`, `Murrah`.
-- Non-target handling with a unified `Other` class (human + logos + unrelated objects).
-- Runtime output includes species (`Cattle`/`Buffalo`) and breed for bovine images.
-- Adaptive non-target confidence calibration for clearer real-world outputs.
+- 3-class model training: `Cattle`, `Buffalo`, `Other`.
+- Runtime rejection support for non-bovine images (returns `Unknown`).
 - Prediction metadata and history tracking in MongoDB.
-- Dashboard charts for species mix, breed distribution, and confidence trend.
 - Dockerized full stack with one command.
 
 ## Architecture
@@ -125,12 +122,6 @@ npm start
 Website (dev mode): http://localhost:3000
 
 ## ML Commands
-
-Prepare generated non-target datasets only (skip training):
-
-```bash
-ONLY_PREPARE_DATA=true python -m ml.train
-```
 
 Train model:
 

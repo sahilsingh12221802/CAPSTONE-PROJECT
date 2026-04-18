@@ -34,20 +34,12 @@ Response shape:
 - `data.id`
 - `data.filename`
 - `data.label`
-- `data.species`
-- `data.breed`
 - `data.confidence`
 - `data.class_probabilities`
-- `data.top_predictions`
 - `data.is_target_animal`
 - `data.message`
 - `data.gate_reason`
 - `data.timestamp`
-
-Notes:
-
-- For bovine images, `label` is species (`Cattle`/`Buffalo`) and `breed` contains the breed name.
-- For non-target images, `label` is `Other` and `species`/`breed` are `null`.
 
 ### `GET /records?limit=50`
 

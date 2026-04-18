@@ -5,8 +5,6 @@ Primary backend implementation now lives in backend/app.py.
 
 from backend.app import app
 
-__all__ = ['app']
-
 if __name__ == '__main__':
     import uvicorn
 
