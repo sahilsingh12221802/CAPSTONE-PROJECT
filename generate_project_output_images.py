@@ -8,7 +8,7 @@ import seaborn as sns
 import tensorflow as tf
 from PIL import Image
 from sklearn.metrics import (classification_report, confusion_matrix,
-                            precision_recall_fscore_support)
+                             precision_recall_fscore_support)
 from tensorflow.keras.preprocessing.image import img_to_array, load_img
 
 ROOT = Path(__file__).resolve().parent
