@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -8,7 +7,8 @@ import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 from PIL import Image
-from sklearn.metrics import (classification_report, confusion_matrix,precision_recall_fscore_support)
+from sklearn.metrics import (classification_report, confusion_matrix,
+                             precision_recall_fscore_support)
 from tensorflow.keras.preprocessing.image import img_to_array, load_img
 
 ROOT = Path(__file__).resolve().parent
@@ -173,7 +173,11 @@ def make_outputs():
 
     # 6-7) augmentation previews
     if train_rows:
-        augmentation_preview(train_rows[0]['path'], 'Augmentation Preview (Generic)', '06_augmentation_preview_generic.png')
+        augmentation_preview(
+            train_rows[0]['path'],
+            'Augmentation Preview (Generic)',
+            '06_augmentation_preview_generic.png'
+        )
         gir_rows = [r for r in train_rows if r['label'] == 'Gir']
         src = gir_rows[0]['path'] if gir_rows else train_rows[min(1, len(train_rows) - 1)]['path']
         augmentation_preview(src, 'Augmentation Preview (Breed Focus)', '07_augmentation_preview_breed_focus.png')
@@ -215,7 +219,7 @@ def make_outputs():
     y_conf = np.max(probs, axis=1)
 
     # 10) breed confusion matrix
-    labels_order = [l for l in class_labels if l in BREEDS + ['Other']]
+    labels_order = [label for label in class_labels if label in BREEDS + ['Other']]
     cm = confusion_matrix(y_true, y_pred, labels=labels_order)
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=labels_order, yticklabels=labels_order)
@@ -283,7 +287,6 @@ def make_outputs():
     reliability_plot(y_true, y_conf, y_pred, '16_reliability_diagram.png')
 
     # 17) top-k accuracy
-    y_idx = np.array([labels_order.index(y) if y in labels_order else -1 for y in y_true])
     idx_map = {lbl: i for i, lbl in enumerate(class_labels)}
     y_idx_model = np.array([idx_map.get(y, -1) for y in y_true])
     topk = {}

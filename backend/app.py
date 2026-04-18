@@ -38,6 +38,7 @@ def startup_event():
     if not os.path.exists(MODEL_PATH):
         raise RuntimeError(f'Trained model not found at: {MODEL_PATH}')
 
+
 @app.post('/classify')
 async def classify_animal(image: UploadFile = File(...)):
     try:
