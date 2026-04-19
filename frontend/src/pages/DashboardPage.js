@@ -22,7 +22,7 @@ function DashboardPage() {
   }, []);
 
   const speciesCounts = useMemo(() => {
-    const counts = { Cattle: 0, Buffalo: 0, Human: 0, Unknown: 0 };
+    const counts = { Cattle: 0, Buffalo: 0, Unknown: 0 };
     records.forEach((item) => {
       if (item.label in counts) {
         counts[item.label] += 1;
