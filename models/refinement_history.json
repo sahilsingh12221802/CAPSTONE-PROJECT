@@ -1,0 +1,10 @@
+{
+  "refinement_type": "gir_vs_sahiwal_focused",
+  "refinement_epochs": 5,
+  "final_train_accuracy": 0.5232273936271667,
+  "final_val_accuracy": 0.831932783126831,
+  "test_accuracy": 0.7638888955116272,
+  "test_loss": 0.8974335193634033,
+  "training_time_minutes": 0.4312806166666666,
+  "timestamp": "2026-04-19T20:13:09.588306"
+}
