@@ -47,17 +47,17 @@ def load_images_with_labels(breed_dirs):
     """Load images and their class labels (only Gir and Sahiwal)"""
     images = []
     labels = []
-    
+
     for breed_dir in breed_dirs:
         breed_name = breed_dir.name
         class_idx = GIR_IDX if breed_name == 'Gir' else SAHIWAL_IDX
-        
+
         if breed_dir.exists():
             for img_path in sorted(breed_dir.glob('*')):
                 if img_path.suffix.lower() in ['.jpg', '.jpeg', '.png']:
                     images.append(str(img_path))
                     labels.append(class_idx)
-    
+
     return np.array(images), np.array(labels)
 
 
@@ -66,30 +66,33 @@ def load_and_preprocess(img_path, label):
     img = load_img(img_path, target_size=(IMG_HEIGHT, IMG_WIDTH))
     img_array = img_to_array(img)
     img_array = preprocess_input(img_array)
-    
+
     # Convert label to 7-class one-hot
     one_hot = np.zeros(NUM_CLASSES, dtype=np.float32)
     one_hot[label] = 1.0
-    
+
     return img_array, one_hot
 
 
 def create_tf_dataset(images, labels, batch_size=BATCH_SIZE, shuffle=True):
     """Create TensorFlow dataset with augmentation for training"""
     dataset = tf.data.Dataset.from_tensor_slices((images, labels))
-    
+
     if shuffle:
         dataset = dataset.shuffle(len(images), reshuffle_each_iteration=True)
-    
+
     def augment_and_load(img_path, label):
         img, one_hot = tf.py_function(
-            lambda p, l: load_and_preprocess(p.numpy().decode('utf-8'), l.numpy()),
+            lambda p, lbl: load_and_preprocess(
+                p.numpy().decode('utf-8'),
+                lbl.numpy(),
+            ),
             [img_path, label],
             [tf.float32, tf.float32]
         )
         img.set_shape((IMG_HEIGHT, IMG_WIDTH, 3))
         one_hot.set_shape((NUM_CLASSES,))
-        
+
         if shuffle:
             # Random augmentations
             img = tf.image.random_flip_left_right(img)
@@ -97,13 +100,13 @@ def create_tf_dataset(images, labels, batch_size=BATCH_SIZE, shuffle=True):
             img = tf.image.rot90(img, k=tf.random.uniform([], 0, 4, dtype=tf.int32))
             img = tf.image.random_brightness(img, 0.15)
             img = tf.image.random_contrast(img, 0.85, 1.15)
-        
+
         return img, one_hot
-    
+
     dataset = dataset.map(augment_and_load, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
-    
+
     return dataset
 
 
@@ -111,68 +114,95 @@ def main():
     print("="*100)
     print("GIR-VS-SAHIWAL FOCUSED REFINEMENT (CUSTOM PIPELINE)")
     print("="*100)
-    print(f"\nRefinement Parameters:")
+    print("\nRefinement Parameters:")
     print(f"  Epochs: {REFINEMENT_EPOCHS}")
     print(f"  Learning Rate: {BASE_LEARNING_RATE}")
     print(f"  Batch Size: {BATCH_SIZE}")
     print(f"  Class mapping: Gir->0, Sahiwal->{SAHIWAL_IDX} (7-class output)")
-    
+
     # Load model
     if not os.path.exists(MODEL_PATH):
         print(f"\nERROR: Model not found at {MODEL_PATH}")
         return
-    
+
     print(f"\nLoading model from {MODEL_PATH}...")
     model = tf.keras.models.load_model(MODEL_PATH)
-    
+
     # Backup
-    print(f"Creating backup...")
+    print("Creating backup...")
     model.save(BACKUP_MODEL_PATH)
-    
+
     # Load training data
     print("\nLoading Gir and Sahiwal images...")
-    
+
     train_imgs, train_labels = load_images_with_labels([
         Path(TRAIN_DIR) / 'Gir',
         Path(TRAIN_DIR) / 'Sahiwal'
     ])
-    
+
     val_imgs, val_labels = load_images_with_labels([
         Path(VAL_DIR) / 'Gir',
         Path(VAL_DIR) / 'Sahiwal'
     ])
-    
+
     test_imgs, test_labels = load_images_with_labels([
         Path(TEST_DIR) / 'Gir',
         Path(TEST_DIR) / 'Sahiwal'
     ])
-    
-    print(f"\nDataset sizes:")
-    print(f"  Train: {len(train_imgs)} ({np.sum(train_labels==GIR_IDX)} Gir, {np.sum(train_labels==SAHIWAL_IDX)} Sahiwal)")
-    print(f"  Val:   {len(val_imgs)} ({np.sum(val_labels==GIR_IDX)} Gir, {np.sum(val_labels==SAHIWAL_IDX)} Sahiwal)")
-    print(f"  Test:  {len(test_imgs)} ({np.sum(test_labels==GIR_IDX)} Gir, {np.sum(test_labels==SAHIWAL_IDX)} Sahiwal)")
-    
+
+    print("\nDataset sizes:")
+    print(
+        f"  Train: {len(train_imgs)} "
+        f"({np.sum(train_labels == GIR_IDX)} Gir, "
+        f"{np.sum(train_labels == SAHIWAL_IDX)} Sahiwal)"
+    )
+    print(
+        f"  Val:   {len(val_imgs)} "
+        f"({np.sum(val_labels == GIR_IDX)} Gir, "
+        f"{np.sum(val_labels == SAHIWAL_IDX)} Sahiwal)"
+    )
+    print(
+        f"  Test:  {len(test_imgs)} "
+        f"({np.sum(test_labels == GIR_IDX)} Gir, "
+        f"{np.sum(test_labels == SAHIWAL_IDX)} Sahiwal)"
+    )
+
     # Create datasets
     print("\nCreating TensorFlow datasets...")
-    train_dataset = create_tf_dataset(train_imgs, train_labels, batch_size=BATCH_SIZE, shuffle=True)
-    val_dataset = create_tf_dataset(val_imgs, val_labels, batch_size=BATCH_SIZE, shuffle=False)
-    test_dataset = create_tf_dataset(test_imgs, test_labels, batch_size=BATCH_SIZE, shuffle=False)
-    
+    train_dataset = create_tf_dataset(
+        train_imgs,
+        train_labels,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+    )
+    val_dataset = create_tf_dataset(
+        val_imgs,
+        val_labels,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+    )
+    test_dataset = create_tf_dataset(
+        test_imgs,
+        test_labels,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+    )
+
     # Freeze early layers
     print("\nFreezing early layers, tuning last 35 layers...")
     for layer in model.layers[:-35]:
         layer.trainable = False
-    
+
     for layer in model.layers[-35:]:
         layer.trainable = True
-    
+
     # Compile
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=BASE_LEARNING_RATE),
         loss=tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.08),
         metrics=['accuracy']
     )
-    
+
     # Callbacks
     early_stopping = EarlyStopping(
         monitor='val_loss',
@@ -180,7 +210,7 @@ def main():
         restore_best_weights=True,
         verbose=1
     )
-    
+
     reduce_lr = ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
@@ -188,17 +218,17 @@ def main():
         min_lr=1e-8,
         verbose=1
     )
-    
+
     # Train
     print("\n" + "="*100)
     print("STARTING REFINEMENT TRAINING")
     print("="*100 + "\n")
-    
+
     start_time = datetime.now()
-    
+
     # Custom class weights focusing on Gir
     class_weight = {GIR_IDX: 4.0, SAHIWAL_IDX: 1.0}
-    
+
     history = model.fit(
         train_dataset,
         validation_data=val_dataset,
@@ -207,45 +237,52 @@ def main():
         callbacks=[early_stopping, reduce_lr],
         verbose=1
     )
-    
+
     training_time = (datetime.now() - start_time).total_seconds() / 60
-    
+
     # Evaluate
     print("\n" + "="*100)
     print("EVALUATING ON TEST SET")
     print("="*100 + "\n")
-    
+
     test_loss, test_accuracy = model.evaluate(test_dataset, verbose=1)
     print(f"\nTest Loss: {test_loss:.4f}")
     print(f"Test Accuracy: {test_accuracy*100:.2f}%")
-    
+
     # Save model
-    print(f"\nSaving refined model...")
+    print("\nSaving refined model...")
     model.save(MODEL_PATH)
-    
+
     # Save history
     history_dict = {
         'refinement_type': 'gir_vs_sahiwal_focused',
         'refinement_epochs': len(history.history['loss']),
         'final_train_accuracy': float(history.history['accuracy'][-1]),
-        'final_val_accuracy': float(history.history['val_accuracy'][-1]) if 'val_accuracy' in history.history else None,
+        'final_val_accuracy': (
+            float(history.history['val_accuracy'][-1])
+            if 'val_accuracy' in history.history
+            else None
+        ),
         'test_accuracy': float(test_accuracy),
         'test_loss': float(test_loss),
         'training_time_minutes': training_time,
         'timestamp': datetime.now().isoformat()
     }
-    
+
     history_path = os.path.join(MODEL_DIR, 'refinement_history.json')
     with open(history_path, 'w') as f:
         json.dump(history_dict, f, indent=2)
-    
-    print(f"Refinement history saved")
-    
+
+    print("Refinement history saved")
+
     print("\n" + "="*100)
     print(f"REFINEMENT COMPLETED in {training_time:.1f} minutes")
     print(f"Binary Classification Accuracy (Gir vs Sahiwal): {test_accuracy*100:.2f}%")
     print("="*100)
-    print("\nNext: Run 'python diagnose_gir.py' to check if Gir/Sahiwal discrimination improved")
+    print(
+        "\nNext: Run 'python diagnose_gir.py' to check if Gir/Sahiwal "
+        "discrimination improved"
+    )
 
 
 if __name__ == '__main__':
