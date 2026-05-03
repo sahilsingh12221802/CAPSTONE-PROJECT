@@ -19,6 +19,8 @@ function DashboardPage() {
     };
 
     fetchRecords();
+    const interval = setInterval(fetchRecords, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const speciesCounts = useMemo(() => {
